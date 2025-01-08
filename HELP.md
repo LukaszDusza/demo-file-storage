@@ -24,7 +24,7 @@ Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz p
 1. **Sklonowanie repozytorium**:
    Jeśli aplikacja znajduje się w repozytorium Git, sklonuj je:
    ```bash
-   git clone https://github.com/username/repo.git
+   git clone https://github.com/LukaszDusza/demo-file-storage.git
    cd repo
    ```
 
