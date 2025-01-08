@@ -3,7 +3,9 @@ package com.demo.filestorage.controller;
 import com.demo.filestorage.model.FileMetadata;
 import com.demo.filestorage.service.FileService;
 import java.nio.ByteBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,15 +28,20 @@ public class FileController {
   }
 
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public Flux<FileMetadata> uploadFiles(@RequestPart("files") Flux<MultipartFile> files) {
-    return files.flatMap(file -> {
-      try {
-        ByteBuffer fileContent = ByteBuffer.wrap(file.getBytes());
-        return fileService.processFile(file.getOriginalFilename(), fileContent);
-      } catch (Exception e) {
-        return Mono.error(e);
-      }
-    });
+  public Flux<FileMetadata> uploadFiles(@RequestPart("files") Flux<FilePart> files) {
+    return files.flatMap(file ->
+        DataBufferUtils.join(file.content())
+            .flatMap(dataBuffer -> {
+              try {
+                byte[] fileBytes = new byte[dataBuffer.readableByteCount()];
+                dataBuffer.read(fileBytes);
+                DataBufferUtils.release(dataBuffer);
+                return fileService.processFile(file.filename(), ByteBuffer.wrap(fileBytes));
+              } catch (Exception e) {
+                return Mono.error(e);
+              }
+            })
+    );
   }
 
   @GetMapping

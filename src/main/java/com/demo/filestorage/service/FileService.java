@@ -30,12 +30,9 @@ public class FileService {
       logger.debug("Calculating checksum for file: {}", fileName);
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       byte[] checksum = digest.digest(fileContent.array());
-      StringBuilder checksumHex = new StringBuilder();
-      for (byte b : checksum) {
-        checksumHex.append(String.format("%02x", b));
-      }
-      long size = fileContent.array().length;
-      FileMetadata metadata = new FileMetadata(null, fileName, checksumHex.toString(), size);
+      String checksumHex = bytesToHex(checksum);
+      long size = fileContent.remaining();
+      FileMetadata metadata = new FileMetadata(null, fileName, checksumHex, size);
       storageService.store(fileName, fileContent);
       logger.info("Storing metadata for file: {}", fileName);
       return repository.save(metadata)
@@ -57,5 +54,17 @@ public class FileService {
 
   public Mono<FileMetadata> getFileByName(String fileName) {
     return repository.findByFileName(fileName);
+  }
+
+  private String bytesToHex(byte[] bytes) {
+    StringBuilder hexString = new StringBuilder();
+    for (byte b : bytes) {
+      String hex = Integer.toHexString(0xff & b);
+      if (hex.length() == 1) {
+        hexString.append('0');
+      }
+      hexString.append(hex);
+    }
+    return hexString.toString();
   }
 }
