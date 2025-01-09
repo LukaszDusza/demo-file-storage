@@ -2,6 +2,8 @@ package com.demo.filestorage.controller;
 
 import com.demo.filestorage.model.FileMetadata;
 import com.demo.filestorage.service.FileService;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
@@ -36,6 +38,24 @@ public class FileController {
                 dataBuffer.read(fileBytes);
                 DataBufferUtils.release(dataBuffer);
                 return fileService.processFile(file.filename(), ByteBuffer.wrap(fileBytes));
+              } catch (Exception e) {
+                return Mono.error(e);
+              }
+            })
+    );
+  }
+
+  @PostMapping(value = "/upload/input-stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Flux<FileMetadata> uploadFilesInputStreamApproach(@RequestPart("files") Flux<FilePart> files) {
+    return files.flatMap(file ->
+        DataBufferUtils.join(file.content())
+            .flatMap(dataBuffer -> {
+              try {
+                byte[] fileBytes = new byte[dataBuffer.readableByteCount()];
+                dataBuffer.read(fileBytes);
+                DataBufferUtils.release(dataBuffer);
+                InputStream inputStream = new ByteArrayInputStream(fileBytes);
+                return fileService.processFile(file.filename(), inputStream);
               } catch (Exception e) {
                 return Mono.error(e);
               }

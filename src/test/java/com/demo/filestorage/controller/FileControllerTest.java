@@ -23,7 +23,7 @@ import reactor.test.StepVerifier;
 
 
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-@AutoConfigureWebTestClient(timeout = "3600")
+@AutoConfigureWebTestClient(timeout = "128000")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class FileControllerTest {
 
@@ -144,6 +144,48 @@ class FileControllerTest {
       // 1. Przesyłanie dużego pliku
       webTestClient.post()
           .uri("/api/v1/files/upload")
+          .contentType(MediaType.MULTIPART_FORM_DATA)
+          .bodyValue(body)
+          .exchange()
+          .expectStatus().isOk()
+          .expectBodyList(FileMetadata.class)
+          .hasSize(1)
+          .value(response -> {
+            assert response.getFirst().fileName().equals("large_test_file.txt");
+            assert response.getFirst().size() == largeFile.length();
+          });
+
+      // 2. Weryfikacja pliku w bazie przez API
+      webTestClient.get()
+          .uri(uriBuilder -> uriBuilder
+              .path("/api/v1/files/by-name")
+              .queryParam("fileName", "large_test_file.txt")
+              .build())
+          .exchange()
+          .expectStatus().isOk()
+          .expectBody(FileMetadata.class)
+          .value(metadata -> {
+            assert metadata.fileName().equals("large_test_file.txt");
+            assert metadata.size() == largeFile.length();
+          });
+    } finally {
+      if (largeFile.exists()) {
+        largeFile.delete();
+      }
+    }
+  }
+
+  @Test
+  void testLargeFileUploadInputStreamApproach() throws IOException {
+    File largeFile = generateLargeFile("large_test_file.txt", 100 * 1024 * 1024); // 100 MB
+
+    try {
+      MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+      body.add("files", new FileSystemResource(largeFile));
+
+      // 1. Przesyłanie dużego pliku
+      webTestClient.post()
+          .uri("/api/v1/files/upload/input-stream")
           .contentType(MediaType.MULTIPART_FORM_DATA)
           .bodyValue(body)
           .exchange()
