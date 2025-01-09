@@ -1,14 +1,15 @@
+
 # Dokumentacja pierwszego uruchomienia aplikacji w Docker
 
 ---
 
-## Wprowadzenie
+## **Wprowadzenie**
 
 Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz pierwszy. Aplikacja została skonfigurowana do automatycznego budowania pliku JAR przy użyciu Mavena i uruchamiania w środowisku Java 21.
 
 ---
 
-## Wymagania wstępne
+## **Wymagania wstępne**
 
 1. **Docker i Docker Compose**:
     - Zainstaluj Dockera na swoim systemie.
@@ -19,36 +20,71 @@ Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz p
 
 ---
 
-## Pierwsze uruchomienie
+## **Pierwsze uruchomienie**
 
 1. **Sklonowanie repozytorium**:
    Jeśli aplikacja znajduje się w repozytorium Git, sklonuj je:
    ```bash
    git clone https://github.com/LukaszDusza/demo-file-storage.git
-   cd repo
+   cd demo-file-storage
    ```
 
-2. **Budowanie obrazu Dockera**:
-   Użyj poniższego polecenia, aby zbudować obraz Dockera:
+2. **Budowanie obrazu Dockera i uruchamianie aplikacji**:
    ```bash
-   docker build -t demo-file-storage .
+   docker-compose up -d
    ```
-    - `-t demo-file-storage`: Nadaje obrazowi nazwę `demo-file-storage`.
 
-3. **Uruchamianie kontenera**:
-   Uruchom kontener na porcie `8080`:
-   ```bash
-   docker run -p 8080:8080 demo-file-storage
-   ```
-    - `-p 8080:8080`: Mapuje port `8080` aplikacji w kontenerze na port `8080` hosta.
-
-4. **Sprawdzenie działania aplikacji**:
+3. **Sprawdzenie działania aplikacji**:
     - Otwórz przeglądarkę internetową i przejdź pod adres: [http://localhost:8080](http://localhost:8080).
-    - Powinna być dostępna aplikacja.
+    - Aplikacja powinna być dostępna.
 
 ---
 
-## Najczęstsze problemy i ich rozwiązania
+## **Dostępne endpointy**
+
+### **1. Przesyłanie plików**
+- **Metoda:** `POST`
+- **Endpoint:** `/api/v1/files/upload`
+- **Opis:** Umożliwia przesyłanie jednego lub wielu plików w formacie `multipart/form-data`.
+- **Przykładowe żądanie cURL:**
+  ```bash
+  curl -X POST http://localhost:8080/api/v1/files/upload        -H "Content-Type: multipart/form-data"        -F "files=@example.txt"
+  ```
+- **Odpowiedź:** Lista obiektów `FileMetadata` z metadanymi zapisanych plików.
+
+### **2. Pobranie wszystkich plików**
+- **Metoda:** `GET`
+- **Endpoint:** `/api/v1/files`
+- **Opis:** Zwraca listę wszystkich plików zapisanych w bazie danych.
+- **Przykładowe żądanie cURL:**
+  ```bash
+  curl -X GET http://localhost:8080/api/v1/files
+  ```
+- **Odpowiedź:** Lista obiektów `FileMetadata`.
+
+### **3. Pobranie pliku po ID**
+- **Metoda:** `GET`
+- **Endpoint:** `/api/v1/files/{id}`
+- **Opis:** Pobiera metadane pliku na podstawie jego ID.
+- **Przykładowe żądanie cURL:**
+  ```bash
+  curl -X GET http://localhost:8080/api/v1/files/1
+  ```
+- **Odpowiedź:** Obiekt `FileMetadata` zawierający dane pliku.
+
+### **4. Pobranie pliku po nazwie**
+- **Metoda:** `GET`
+- **Endpoint:** `/api/v1/files/by-name?fileName={fileName}`
+- **Opis:** Pobiera metadane pliku na podstawie jego nazwy.
+- **Przykładowe żądanie cURL:**
+  ```bash
+  curl -X GET "http://localhost:8080/api/v1/files/by-name?fileName=example.txt"
+  ```
+- **Odpowiedź:** Obiekt `FileMetadata` zawierający dane pliku.
+
+---
+
+## **Najczęstsze problemy i ich rozwiązania**
 
 1. **Brak Dockera**:
    Jeśli Docker nie jest zainstalowany, zainstaluj go zgodnie z [instrukcją](https://www.docker.com/get-started).
@@ -60,7 +96,7 @@ Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz p
 3. **Błąd: "Address already in use"**:
     - Port `8080` może być zajęty. Uruchom aplikację na innym porcie, np.:
       ```bash
-      docker run -p 9090:8080 demo-file-storage
+      docker-compose up -d --build -p 9090:8080
       ```
 
 4. **Out of Memory Error**:
@@ -71,7 +107,7 @@ Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz p
 
 ---
 
-## Dodatkowe informacje
+## **Dodatkowe informacje**
 
 - **Zatrzymanie kontenera**:
   Aby zatrzymać uruchomioną aplikację, użyj:
@@ -94,7 +130,7 @@ Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz p
 
 ---
 
-## Uwagi końcowe
+## **Uwagi końcowe**
 
 Twoja aplikacja jest teraz gotowa do uruchomienia w Dockerze. Jeśli pojawią się pytania lub problemy, zapoznaj się z logami aplikacji za pomocą:
 ```bash
