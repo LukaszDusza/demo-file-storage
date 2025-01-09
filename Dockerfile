@@ -8,4 +8,5 @@ RUN mvn clean compile package -DskipTests
 FROM openjdk:21-jdk-slim
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
+COPY src/main/resources/schema.sql schema.sql
 ENTRYPOINT ["java", "-jar", "app.jar"]
