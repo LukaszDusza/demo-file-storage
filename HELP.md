@@ -52,6 +52,16 @@ Ta dokumentacja opisuje, jak uruchomić aplikację przy użyciu Dockera po raz p
   ```
 - **Odpowiedź:** Lista obiektów `FileMetadata` z metadanymi zapisanych plików.
 
+### **1a. Przesyłanie plików**
+- **Metoda:** `POST`
+- **Endpoint:** `/api/v1/files/upload/input-stream`
+- **Opis:** Umożliwia przesyłanie jednego lub wielu plików w formacie `multipart/form-data`.
+- **Przykładowe żądanie cURL:**
+  ```bash
+  curl -X POST http://localhost:8080/api/v1/files/upload/input-stream        -H "Content-Type: multipart/form-data"        -F "files=@example.txt"
+  ```
+- **Odpowiedź:** Lista obiektów `FileMetadata` z metadanymi zapisanych plików.
+
 ### **2. Pobranie wszystkich plików**
 - **Metoda:** `GET`
 - **Endpoint:** `/api/v1/files`

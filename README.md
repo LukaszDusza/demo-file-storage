@@ -65,6 +65,11 @@ src/main/java/com/demo/filesorage
 - **Endpoint:** `/files/upload`
 - **Opis:** Przetwarza przesłane pliki, oblicza ich sumy kontrolne, zapisuje metadane w bazie danych oraz przekazuje pliki do `StorageService`.
 
+### 1a. **Przesyłanie plików**
+- **Metoda:** `POST`
+- **Endpoint:** `/files/upload/input-stream`
+- **Opis:** Przetwarza przesłane pliki, oblicza ich sumy kontrolne, zapisuje metadane w bazie danych oraz przekazuje pliki do `StorageService`.
+
 ### 2. **Pobieranie wszystkich plików**
 - **Metoda:** `GET`
 - **Endpoint:** `/files`
