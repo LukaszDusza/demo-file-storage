@@ -1,5 +1,6 @@
 package com.demo.filestorage.service;
 
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,5 +18,10 @@ public class StorageServiceImpl implements StorageService {
     //logic
 
     logger.info("Successfully stored file: {}", fileName);
+  }
+
+  @Override
+  public void store(String fileName, InputStream content) {
+
   }
 }

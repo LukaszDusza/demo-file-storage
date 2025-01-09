@@ -1,102 +1,151 @@
 package com.demo.filestorage.service;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.mockito.internal.verification.VerificationModeFactory.times;
-
 import com.demo.filestorage.model.FileMetadata;
 import com.demo.filestorage.repository.FileMetadataRepository;
-import java.nio.ByteBuffer;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@SpringBootTest
 class FileServiceTest {
 
+  @Autowired
   private FileMetadataRepository repository;
-  private StorageService storageService;
+
+  @Autowired
   private FileService fileService;
+
 
   @BeforeEach
   void setUp() {
-    repository = mock(FileMetadataRepository.class);
-    storageService = mock(StorageService.class);
-    fileService = new FileService(repository, storageService);
+    repository.deleteAll().block(); // Czyszczenie bazy przed każdym testem
   }
 
   @Test
-  void testProcessFile() {
+  void testProcessFile() throws IOException, NoSuchAlgorithmException {
     String fileName = "test.txt";
-    ByteBuffer fileContent = ByteBuffer.wrap("Sample content".getBytes());
+    InputStream fileContent = new ByteArrayInputStream("Sample content".getBytes(StandardCharsets.UTF_8));
 
-    FileMetadata metadata = new FileMetadata(null, fileName, "expectedChecksum", fileContent.array().length);
+    // Oczekiwane dane
+    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+    byte[] expectedChecksum = digest.digest("Sample content".getBytes(StandardCharsets.UTF_8));
+    String expectedChecksumHex = bytesToHex(expectedChecksum);
 
-    when(repository.save(any(FileMetadata.class))).thenReturn(Mono.just(metadata));
-
+    // Wywołanie metody
     Mono<FileMetadata> result = fileService.processFile(fileName, fileContent);
 
+    // Weryfikacja
     StepVerifier.create(result)
-        .expectNextMatches(savedMetadata -> {
-          verify(storageService, times(1)).store(eq(fileName), eq(fileContent));
-          return savedMetadata.fileName().equals(fileName)
-              && savedMetadata.size() == fileContent.array().length;
+        .assertNext(metadata -> {
+          assert metadata.fileName().equals(fileName);
+          assert metadata.size() == "Sample content".length();
+          assert metadata.checksum().equals(expectedChecksumHex);
         })
         .verifyComplete();
 
-    verify(repository, times(1)).save(any(FileMetadata.class));
+    // Sprawdzenie zapisu w bazie
+    StepVerifier.create(repository.findByFileName(fileName))
+        .assertNext(metadata -> {
+          assert metadata.fileName().equals(fileName);
+          assert metadata.size() == "Sample content".length();
+          assert metadata.checksum().equals(expectedChecksumHex);
+        })
+        .verifyComplete();
   }
 
   @Test
   void testGetAllFiles() {
-    FileMetadata file1 = new FileMetadata(1L, "file1.txt", "checksum1", 100L);
-    FileMetadata file2 = new FileMetadata(2L, "file2.txt", "checksum2", 200L);
+    FileMetadata file1 = new FileMetadata(null, "file1.txt", "checksum1", 100L);
+    FileMetadata file2 = new FileMetadata(null, "file2.txt", "checksum2", 200L);
 
-    when(repository.findAll()).thenReturn(Flux.just(file1, file2));
+    repository.save(file1).block();
+    repository.save(file2).block();
 
     Flux<FileMetadata> result = fileService.getAllFiles();
 
     StepVerifier.create(result)
-        .expectNext(file1)
-        .expectNext(file2)
+        .expectNextMatches(metadata -> metadata.fileName().equals("file1.txt") &&
+            metadata.checksum().equals("checksum1") &&
+            metadata.size() == 100L)
+        .expectNextMatches(metadata -> metadata.fileName().equals("file2.txt") &&
+            metadata.checksum().equals("checksum2") &&
+            metadata.size() == 200L)
         .verifyComplete();
-
-    verify(repository, times(1)).findAll();
   }
 
   @Test
   void testGetFileById() {
-    Long fileId = 1L;
-    FileMetadata file = new FileMetadata(fileId, "file1.txt", "checksum1", 100L);
+    FileMetadata file = repository.save(new FileMetadata(null, "file1.txt", "checksum1", 100L)).block();
 
-    when(repository.findById(fileId)).thenReturn(Mono.just(file));
-
-    Mono<FileMetadata> result = fileService.getFileById(fileId);
+    Mono<FileMetadata> result = fileService.getFileById(file.id());
 
     StepVerifier.create(result)
         .expectNext(file)
         .verifyComplete();
-
-    verify(repository, times(1)).findById(fileId);
   }
 
   @Test
   void testGetFileByName() {
-    String fileName = "file1.txt";
-    FileMetadata file = new FileMetadata(1L, fileName, "checksum1", 100L);
+    FileMetadata file = repository.save(new FileMetadata(null, "file1.txt", "checksum1", 100L)).block();
 
-    when(repository.findByFileName(fileName)).thenReturn(Mono.just(file));
-
-    Mono<FileMetadata> result = fileService.getFileByName(fileName);
+    Mono<FileMetadata> result = fileService.getFileByName("file1.txt");
 
     StepVerifier.create(result)
         .expectNext(file)
         .verifyComplete();
-
-    verify(repository, times(1)).findByFileName(fileName);
   }
+
+  @Test
+  void testProcessLargeFile() throws IOException, NoSuchAlgorithmException {
+    String largeFileContent = "A".repeat(100 * 1024 * 1024); // 100 MB danych
+    InputStream largeFileStream = new ByteArrayInputStream(largeFileContent.getBytes(StandardCharsets.UTF_8));
+
+    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+    byte[] expectedChecksum = digest.digest(largeFileContent.getBytes(StandardCharsets.UTF_8));
+    String expectedChecksumHex = bytesToHex(expectedChecksum);
+
+    Mono<FileMetadata> result = fileService.processFile("large_test_file.txt", largeFileStream);
+
+    StepVerifier.create(result)
+        .assertNext(metadata -> {
+          assert metadata.fileName().equals("large_test_file.txt");
+          assert metadata.size() == largeFileContent.length();
+          assert metadata.checksum().equals(expectedChecksumHex);
+        })
+        .verifyComplete();
+
+    // Sprawdzenie zapisu w bazie
+    StepVerifier.create(repository.findByFileName("large_test_file.txt"))
+        .assertNext(metadata -> {
+          assert metadata.fileName().equals("large_test_file.txt");
+          assert metadata.size() == largeFileContent.length();
+          assert metadata.checksum().equals(expectedChecksumHex);
+        })
+        .verifyComplete();
+  }
+
+  private String bytesToHex(byte[] bytes) {
+    StringBuilder hexString = new StringBuilder();
+    for (byte b : bytes) {
+      String hex = Integer.toHexString(0xff & b);
+      if (hex.length() == 1) {
+        hexString.append('0');
+      }
+      hexString.append(hex);
+    }
+    return hexString.toString();
+  }
+
 }

@@ -2,14 +2,15 @@ package com.demo.filestorage.service;
 
 import com.demo.filestorage.model.FileMetadata;
 import com.demo.filestorage.repository.FileMetadataRepository;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 public class FileService {
@@ -66,5 +67,36 @@ public class FileService {
       hexString.append(hex);
     }
     return hexString.toString();
+  }
+
+  public Mono<FileMetadata> processFile(String fileName, InputStream fileContent) {
+    logger.info("Processing file: {}", fileName);
+    try {
+      logger.debug("Calculating checksum for file: {}", fileName);
+
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] buffer = new byte[8192];
+      int bytesRead;
+      long size = 0;
+
+      while ((bytesRead = fileContent.read(buffer)) != -1) {
+        digest.update(buffer, 0, bytesRead);
+        size += bytesRead;
+      }
+      String checksumHex = bytesToHex(digest.digest());
+      FileMetadata metadata = new FileMetadata(null, fileName, checksumHex, size);
+      fileContent.reset();
+      storageService.store(fileName, fileContent);
+
+      logger.info("Storing metadata for file: {}", fileName);
+
+      // Zapis metadanych w bazie
+      return repository.save(metadata)
+          .doOnSuccess(savedMetadata -> logger.info("Successfully saved metadata for file: {}", fileName))
+          .doOnError(error -> logger.error("Error saving metadata for file: {}", fileName, error));
+    } catch (Exception e) {
+      logger.error("Error processing file: {}", fileName, e);
+      return Mono.error(e);
+    }
   }
 }
