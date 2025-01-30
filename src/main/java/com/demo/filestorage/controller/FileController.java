@@ -3,6 +3,7 @@ package com.demo.filestorage.controller;
 import com.demo.filestorage.model.FileMetadata;
 import com.demo.filestorage.service.FileService;
 import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 @RestController
 @RequestMapping("/api/v1/files")
@@ -32,18 +34,41 @@ public class FileController {
   public Flux<FileMetadata> uploadFiles(@RequestPart("files") Flux<FilePart> files) {
     return files.flatMap(file ->
         DataBufferUtils.join(file.content())
-            .flatMap(dataBuffer -> {
+            .flatMap(dataBuffer -> Mono.fromCallable(() -> {
+                      // 1. Zapis do pliku w kontekście blokującym
+                      byte[] fileBytes = new byte[dataBuffer.readableByteCount()];
+                      dataBuffer.read(fileBytes);
+                      DataBufferUtils.release(dataBuffer);
+
+                      java.io.File tempFile = java.io.File.createTempFile("upload_", "_" + file.filename());
+                      try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
+                        fos.write(fileBytes);
+                      }
+                      return tempFile;
+                    })
+                    .subscribeOn(Schedulers.boundedElastic()) // Operacje blokujące na dedykowanym schedulerze
+            )
+            .flatMap(tempFile -> {
+              // 2. Przetwarzanie pliku
+              InputStream tempFileInputStream = null;
               try {
-                byte[] fileBytes = new byte[dataBuffer.readableByteCount()];
-                dataBuffer.read(fileBytes);
-                DataBufferUtils.release(dataBuffer);
-                return fileService.processFile(file.filename(), ByteBuffer.wrap(fileBytes));
-              } catch (Exception e) {
-                return Mono.error(e);
+                tempFileInputStream = new java.io.FileInputStream(tempFile);
+              } catch (FileNotFoundException e) {
+                return Mono.error(new RuntimeException(e));
               }
+              return fileService.processFile(file.filename(), tempFileInputStream)
+                  .doFinally(signalType -> {
+                    // 3. Usunięcie pliku tymczasowego po przetwarzaniu
+                    if (tempFile.exists()) {
+                      tempFile.delete();
+                    }
+                  });
             })
     );
   }
+
+
+
 
   @PostMapping(value = "/upload/input-stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public Flux<FileMetadata> uploadFilesInputStreamApproach(@RequestPart("files") Flux<FilePart> files) {
@@ -77,5 +102,21 @@ public class FileController {
   public Mono<FileMetadata> getFileByName(@RequestParam String fileName) {
     return fileService.getFileByName(fileName);
   }
+
+
+  @PostMapping(value = "/upload/stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Flux<FileMetadata> uploadFilesStream(@RequestPart("files") Flux<FilePart> files) {
+    return files.flatMap(file -> {
+      // Strumieniowe przesyłanie danych z pliku (bytes stream)
+      return fileService.processFileStream(file.filename(),
+          file.content().map(dataBuffer -> {
+            byte[] bytes = new byte[dataBuffer.readableByteCount()];
+            dataBuffer.read(bytes);
+            DataBufferUtils.release(dataBuffer);
+            return bytes;
+          }));
+    });
+  }
+
 
 }

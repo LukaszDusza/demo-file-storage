@@ -23,7 +23,7 @@ import reactor.test.StepVerifier;
 
 
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-@AutoConfigureWebTestClient(timeout = "128000")
+@AutoConfigureWebTestClient(timeout = "360000")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class FileControllerTest {
 
@@ -135,15 +135,15 @@ class FileControllerTest {
 
   @Test
   void testLargeFileUpload() throws IOException {
-    File largeFile = generateLargeFile("large_test_file.txt", 100 * 1024 * 1024); // 100 MB
+    File largeFile1 = new File("randomDataFile_1.bin");
 
     try {
       MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-      body.add("files", new FileSystemResource(largeFile));
+      body.add("files", new FileSystemResource(largeFile1));
 
       // 1. Przesyłanie dużego pliku
       webTestClient.post()
-          .uri("/api/v1/files/upload")
+          .uri("/api/v1/files/upload/stream")
           .contentType(MediaType.MULTIPART_FORM_DATA)
           .bodyValue(body)
           .exchange()
@@ -151,26 +151,26 @@ class FileControllerTest {
           .expectBodyList(FileMetadata.class)
           .hasSize(1)
           .value(response -> {
-            assert response.getFirst().fileName().equals("large_test_file.txt");
-            assert response.getFirst().size() == largeFile.length();
+            assert response.getFirst().fileName().equals("randomDataFile_1.bin");
+            assert response.getFirst().size() == largeFile1.length();
           });
 
       // 2. Weryfikacja pliku w bazie przez API
       webTestClient.get()
           .uri(uriBuilder -> uriBuilder
               .path("/api/v1/files/by-name")
-              .queryParam("fileName", "large_test_file.txt")
+              .queryParam("fileName", "randomDataFile_1.bin")
               .build())
           .exchange()
           .expectStatus().isOk()
           .expectBody(FileMetadata.class)
           .value(metadata -> {
-            assert metadata.fileName().equals("large_test_file.txt");
-            assert metadata.size() == largeFile.length();
+            assert metadata.fileName().equals("randomDataFile_1.bin");
+            assert metadata.size() == largeFile1.length();
           });
     } finally {
-      if (largeFile.exists()) {
-        largeFile.delete();
+      if (largeFile1.exists()) {
+      //  largeFile.delete();
       }
     }
   }

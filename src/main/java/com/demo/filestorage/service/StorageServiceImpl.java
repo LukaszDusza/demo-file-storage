@@ -13,11 +13,10 @@ public class StorageServiceImpl implements StorageService {
 
   @Override
   public void store(String fileName, ByteBuffer fileContent) {
-    logger.info("Storing file locally: {}", fileName);
+    logger.info("Received part of file: {}", fileName);
 
     //logic
 
-    logger.info("Successfully stored file: {}", fileName);
   }
 
   @Override

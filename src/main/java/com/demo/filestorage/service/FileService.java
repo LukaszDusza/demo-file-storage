@@ -85,7 +85,6 @@ public class FileService {
       }
       String checksumHex = bytesToHex(digest.digest());
       FileMetadata metadata = new FileMetadata(null, fileName, checksumHex, size);
-      fileContent.reset();
       storageService.store(fileName, fileContent);
 
       logger.info("Storing metadata for file: {}", fileName);
@@ -99,4 +98,33 @@ public class FileService {
       return Mono.error(e);
     }
   }
+
+  public Mono<FileMetadata> processFileStream(String fileName, Flux<byte[]> fileChunks) {
+    logger.info("Starting file processing (streaming approach): {}", fileName);
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return fileChunks
+          .doOnNext(chunk -> // Zapisujemy porcję danych do StorageService
+              storageService.store(fileName, ByteBuffer.wrap(chunk)))
+          // 1. Przetwarzaj każdą porcję pliku, obliczając jednocześnie checksum
+          .doOnNext(digest::update)
+          .reduce(0L, (size, bytes) -> size + bytes.length) // Suma rozmiaru pliku
+          .flatMap(size -> {
+            // 2. Generowanie sumy kontrolnej (checksum)
+            String checksumHex = bytesToHex(digest.digest());
+            // 3. Utworzenie obiektu metadanych i przechowanie go w bazie
+            FileMetadata metadata = new FileMetadata(null, fileName, checksumHex, size);
+            return repository.save(metadata)
+                .doOnSuccess(savedMetadata ->
+                    logger.info("Successfully saved metadata for file: {}", fileName)
+                );
+          }).doOnError(error -> {
+            logger.error("Error processing file stream: {}", fileName, error);
+          });
+    } catch (NoSuchAlgorithmException e) {
+      logger.error("Error initializing checksum calculation: {}", fileName, e);
+      return Mono.error(e);
+    }
+  }
+
 }
